@@ -45,8 +45,9 @@
 from surgical_robotics_challenge.kinematics.ecmFK import *
 from surgical_robotics_challenge.utils.utilities import cartesian_interpolate_step
 from PyKDL import Frame, Rotation, Vector, Twist
+import numpy as np
 import time
-import rospy
+import rclpy
 from threading import Thread
 
 
@@ -95,19 +96,16 @@ class ECM:
                     pos_goal_reached = True
                     rot_goal_reached = True
 
-                if rospy.is_shutdown():
+                if not rclpy.ok():
                     self._force_exit_thread = True
                 time.sleep(0.01)
             self._thread_busy = False
-        except:
-            # Exception! Exit gracefully
+        except Exception as e:
+            print(f"Exception in _interpolate: {e}")
             pass
 
     def is_present(self):
-        if self.camera_handle is None:
-            return False
-        else:
-            return True
+        return self.camera_handle is not None
 
     def get_T_c_w(self):
         self._update_camera_pose()
@@ -150,10 +148,10 @@ class ECM:
         self._pose_changed = True
 
     def servo_cv(self, twist, dt):
-        if type(twist) in [np.array, np.ndarray]:
+        if isinstance(twist, (np.array, np.ndarray)):
             v = Vector(twist[0], twist[1], twist[2]) * dt
             w = Vector(twist[3], twist[4], twist[5]) * dt
-        elif type(twist) is Twist:
+        elif isinstance(twist, Twist):
             v = twist.vel * dt
             w = twist.rot * dt
         else:
@@ -162,7 +160,6 @@ class ECM:
         T_c_w = self.get_T_c_w()
         T_cmd = Frame(Rotation.RPY(w[0], w[1], w[2]), v)
         self.servo_cp(T_c_w * T_cmd)
-        pass
 
     def servo_jp(self, jp):
         j0 = jp[0]
@@ -170,7 +167,7 @@ class ECM:
         j2 = jp[2]
         j3 = jp[3]
         cmd = [j0, j1, j2, j3, 0.0]
-        T_t_c = convert_mat_to_frame(compute_FK(cmd, 5)) # Tip if camera frame
+        T_t_c = convert_mat_to_frame(compute_FK(cmd, 5))  # Tip in camera frame
         self.servo_cp(self._T_c_w_init * T_t_c)
 
     def measured_cp(self):

@@ -55,7 +55,6 @@ bodies:
 - BODY Thread_037
 - BODY Thread_038
 - BODY Thread_039
-- BODY BlackGround
 - BODY Needle
 joints:
 - JOINT Needle-Thread

@@ -46,6 +46,230 @@
 from surgical_robotics_challenge.kinematics.psmKinematics import *
 from surgical_robotics_challenge.utils.joint_errors_model import JointErrorsModel
 from surgical_robotics_challenge.utils import coordinate_frames
+import rclpy
+from rclpy.node import Node
+import time
+from threading import Thread, Lock
+from surgical_robotics_challenge.utils.interpolation import Interpolation
+from surgical_robotics_challenge.simulation_manager import SimulationManager, SimulationObject
+
+class PSMJointMapping:
+    def __init__(self):
+        self.idx_to_name = {0: 'baselink-yawlink',
+                            1: 'yawlink-pitchbacklink',
+                            2: 'pitchendlink-maininsertionlink',
+                            3: 'maininsertionlink-toolrolllink',
+                            4: 'toolrolllink-toolpitchlink',
+                            5: 'toolpitchlink-toolyawlink'}
+
+        self.name_to_idx = {'baselink-yawlink': 0,
+                            'yawlink-pitchbacklink': 1,
+                            'pitchendlink-maininsertionlink': 2,
+                            'maininsertionlink-toolrolllink': 3,
+                            'toolrolllink-toolpitchlink': 4,
+                            'toolpitchlink-toolyawlink': 5}
+
+
+pjm = PSMJointMapping()
+
+
+class PSM:
+    def __init__(self, simulation_manager: SimulationManager, name, add_joint_errors=False, detect_tool_id=True, tool_id=PSM_TYPE_DEFAULT):
+        self.simulation_manager = simulation_manager
+        self.name = name
+        self.base = self.simulation_manager.get_obj_handle(self.name + '/baselink', required=True)
+        self.tool_id_body = self.simulation_manager.get_obj_handle(name + '/tool_id', required=True)
+
+        if detect_tool_id:
+            self.tool_id = self.get_tool_id()
+            tool_id = self.tool_id
+        else:
+            self.tool_id = tool_id
+
+        self.tool_id = int(self.tool_id)
+        self.validate_tool_id()
+
+        self.base.set_joint_types([JointType.REVOLUTE, JointType.REVOLUTE, JointType.PRISMATIC, JointType.REVOLUTE,
+                                   JointType.REVOLUTE, JointType.REVOLUTE, JointType.REVOLUTE, JointType.REVOLUTE])
+        self.target_IK = self.simulation_manager.get_obj_handle(name + '_target_ik')
+        self.palm_joint_IK = self.simulation_manager.get_obj_handle(name + '_palm_joint_ik')
+        self.target_FK = self.simulation_manager.get_obj_handle(name + '_target_fk')
+
+        self.left_finger_ghost = self.simulation_manager._client.get_obj_handle(name + '/left_finger_ghost')
+        self.right_finger_ghost = self.simulation_manager._client.get_obj_handle(name + '/right_finger_ghost')
+        self.actuators = []
+        self.actuators.append(self.simulation_manager._client.get_obj_handle(name + '/Actuator0'))
+        time.sleep(0.5)
+        self.grasped = [False, False, False]
+        self.graspable_objs_prefix = ["Needle", "Thread", "Puzzle"]
+        self.grasped_obj_name = None
+        self.grasp_actuation_jaw_angle = 0.05
+        self.T_t_b_home = coordinate_frames.PSM.T_t_b_home
+        self._kd = PSMKinematicSolver(psm_type=self.tool_id, tool_id=self.tool_id)
+
+        self._T_b_w = None
+        self._T_w_b = None
+        self._num_joints = 6
+        self._ik_solution = np.zeros([self._num_joints])
+        self._last_jp = np.zeros([self._num_joints])
+        self._joints_error_mask = [1, 1, 1, 0, 0, 0]
+        self._joint_error_model = JointErrorsModel(self.name, self._num_joints)
+        self.interpolater = Interpolation()
+        self._force_exit_thread = False
+        self._thread_lock = Lock()
+        if add_joint_errors:
+            max_errors_list = [0.] * self._num_joints
+            max_errors_list[0] = np.deg2rad(5.0)
+            max_errors_list[1] = np.deg2rad(5.0)
+            max_errors_list[2] = 0.005
+            self._joint_error_model.generate_random_from_max_value(max_errors_list)
+
+        self.set_jaw_angle(0.5)
+
+    def get_rostopic_name(self):
+        return self.base.get_ros_name()
+
+    def get_tool_id(self) -> int:
+        rostopic_name = self.tool_id_body.get_ros_name()
+        tool_id = int(rostopic_name.split('/')[-1])
+        return tool_id
+
+    def validate_tool_id(self):
+        status = PSMKinematicSolver.is_tool_definition_available(self.tool_id)
+        if not status:
+            print(f"ERROR: Tool ID '{self.tool_id}' is not available in the kinematic solver", file=sys.stderr)
+            raise RuntimeError
+
+    def set_home_pose(self, pose):
+        self.T_t_b_home = pose
+
+    def is_present(self):
+        return self.base is not None
+
+    def get_ik_solution(self):
+        return self._ik_solution
+
+    def get_lower_limits(self):
+        return self._kd.lower_limits
+
+    def get_upper_limits(self):
+        return self._kd.upper_limits
+
+    def get_T_b_w(self):
+        self._update_base_pose()
+        return self._T_b_w
+
+    def get_T_w_b(self):
+        self._update_base_pose()
+        return self._T_w_b
+
+    def _update_base_pose(self):
+        self._T_b_w = self.base.get_pose()
+        self._T_w_b = self._T_b_w.Inverse()
+
+    def run_grasp_logic(self, jaw_angle):
+        if len(self.actuators) == 0:
+            return
+
+        if jaw_angle < self.grasp_actuation_jaw_angle:
+            if not self.grasped[0]:
+                sensed_object_names = self.left_finger_ghost.get_all_sensed_obj_names()
+                sensed_object_names += self.right_finger_ghost.get_all_sensed_obj_names()
+                for gon in self.graspable_objs_prefix:
+                    matches = [son for son in sensed_object_names if gon in son]
+                    if matches:
+                        self.grasped_obj_name = matches[0]
+                        self.actuators[0].actuate(self.grasped_obj_name)
+                        self.grasped[0] = True
+        else:
+            self.actuators[0].deactuate()
+            self.grasped_obj_name = False
+            if self.grasped[0]:
+                print('Releasing Grasped Object')
+            self.grasped[0] = False
+
+    def servo_cp(self, T_t_b):
+        if type(T_t_b) in [np.matrix, np.array]:
+            T_t_b = convert_mat_to_frame(T_t_b)
+        ik_solution = self._kd.compute_IK(T_t_b)
+        self._ik_solution = enforce_limits(ik_solution, self.get_lower_limits(), self.get_upper_limits())
+        self.servo_jp(self._ik_solution)
+
+    def move_cp(self, T_t_b, execute_time=0.5, control_rate=120):
+        if type(T_t_b) in [np.matrix, np.array]:
+            T_t_b = convert_mat_to_frame(T_t_b)
+        ik_solution = self._kd.compute_IK(T_t_b)
+        self._ik_solution = enforce_limits(ik_solution, self.get_lower_limits(), self.get_upper_limits())
+        self.move_jp(self._ik_solution, execute_time, control_rate)
+
+    def servo_cv(self, twist):
+        pass
+
+    def optimize_jp(self, jp):
+        pass
+
+    def servo_jp(self, jp):
+        jp = self._joint_error_model.add_to_joints(jp, self._joints_error_mask)
+        for i in range(6):
+            self.base.set_joint_pos(i, jp[i])
+
+    def move_jp(self, jp_cmd, execute_time=0.5, control_rate=120):
+        jp_cur = self.measured_jp()
+        jv_cur = self.measured_jv()
+        zero = np.zeros(6)
+        self.interpolater.compute_interpolation_params(jp_cur, jp_cmd, jv_cur, zero, zero, zero, 0, execute_time)
+        trajectory_execute_thread = Thread(
+            target=self._execute_trajectory,
+            args=(self.interpolater, execute_time, control_rate,)
+        )
+        self._force_exit_thread = True
+        trajectory_execute_thread.start()
+
+    def _execute_trajectory(self, trajectory_gen, execute_time, control_rate):
+        self._thread_lock.acquire()
+        self._force_exit_thread = False
+        start_time = time.time()
+        rate = 1.0 / control_rate
+
+        while rclpy.ok() and not self._force_exit_thread:
+            cur_time = time.time() - start_time
+            if cur_time > execute_time:
+                break
+            val = trajectory_gen.get_interpolated_x(np.array(cur_time, dtype=np.float32))
+            self.servo_jp(val)
+            time.sleep(rate)
+
+        self._thread_lock.release()
+
+    def servo_jv(self, jv):
+        print("Setting Joint Vel", jv)
+        for i in range(6):
+            self.base.set_joint_vel(i, jv[i])
+
+    def set_jaw_angle(self, jaw_angle):
+        self.base.set_joint_pos(6, jaw_angle)
+        self.base.set_joint_pos(7, jaw_angle)
+        self.run_grasp_logic(jaw_angle)
+
+    def measured_cp(self):
+        jp = self.measured_jp()
+        jp.append(0.0)
+        return self._kd.compute_FK(jp, 7)
+
+    def measured_jp(self):
+        q = [self.base.get_joint_pos(i) for i in range(6)]
+        q = self._joint_error_model.remove_from_joints(q, self._joints_error_mask)
+        return q
+
+    def measured_jv(self):
+        return [self.base.get_joint_vel(i) for i in range(6)]
+
+    def get_joint_names(self):
+        return self.base.get_joint_names()
+
+'''from surgical_robotics_challenge.kinematics.psmKinematics import *
+from surgical_robotics_challenge.utils.joint_errors_model import JointErrorsModel
+from surgical_robotics_challenge.utils import coordinate_frames
 import rospy
 import time
 from threading import Thread, Lock
@@ -294,4 +518,4 @@ class PSM:
         return [j0, j1, j2, j3, j4, j5]
 
     def get_joint_names(self):
-        return self.base.get_joint_names()
+        return self.base.get_joint_names()'''
