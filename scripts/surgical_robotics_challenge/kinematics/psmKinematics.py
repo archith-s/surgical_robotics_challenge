@@ -142,7 +142,7 @@ class PSMKinematicSolver:
     
     @staticmethod
     def is_tool_definition_available(tool_id: Union[str, int]) -> bool:
-        tool_id = int(tool_id)
+        #tool_id = int(tool_id)
         available = False
         for tool in list(ToolType):
             if tool.value == tool_id:

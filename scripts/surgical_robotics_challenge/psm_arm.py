@@ -86,7 +86,7 @@ class PSM:
         else:
             self.tool_id = tool_id
 
-        self.tool_id = int(self.tool_id)
+        #self.tool_id = int(self.tool_id)
         self.validate_tool_id()
 
         self.base.set_joint_types([JointType.REVOLUTE, JointType.REVOLUTE, JointType.PRISMATIC, JointType.REVOLUTE,
@@ -131,7 +131,8 @@ class PSM:
 
     def get_tool_id(self) -> int:
         rostopic_name = self.tool_id_body.get_ros_name()
-        tool_id = int(rostopic_name.split('/')[-1])
+        #tool_id = int(rostopic_name.split('/')[-1])
+        tool_id = rostopic_name.split('/')[-1]
         return tool_id
 
     def validate_tool_id(self):
