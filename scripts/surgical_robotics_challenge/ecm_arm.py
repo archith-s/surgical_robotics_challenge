@@ -122,6 +122,8 @@ class ECM:
         self._pose_changed = True
 
     def _update_camera_pose(self):
+        print('camera_handle: ')
+        print(self.camera_handle)
         self._T_c_w = self.camera_handle.get_pose()
         self._T_w_c = self._T_c_w.Inverse()
         self._pose_changed = False

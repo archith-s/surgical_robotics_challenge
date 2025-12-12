@@ -190,7 +190,7 @@ class MTM:
         self.gripper_angle = 0
 
         self.switch_psm = False
-        self._button_msg_time = self.node.get_clock().now()
+        #self._button_msg_time = self.node.get_clock().now()
         self._switch_psm_duration = rclpy.duration.Duration(seconds=0.5)
 
         self._arm_publishing = False

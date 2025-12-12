@@ -75,7 +75,7 @@ config_folder = os.path.join(dynamic_path, 'kinematics', 'config')
 
 
 # Currently implemented PSMs
-class PSMType(Enum):
+'''class PSMType(Enum):
     LND = 400006
     LND_SI = 420006
 
@@ -88,12 +88,17 @@ class ToolType(Enum):
 PSM_TYPE_DEFAULT = PSMType.LND.value
 TOOL_TYPE_DEFAULT = ToolType.LND.value
 
+PSM_TYPE_DEFAULT = 400006
+TOOL_TYPE_DEFAULT = 420006'''
+
+PSM_TYPE_DEFAULT = 'id_420006'
+TOOL_TYPE_DEFAULT = 'id_420006'
 class PSMKinematicSolver:
     def __init__(self, root_dir=config_folder, psm_type=PSM_TYPE_DEFAULT, tool_id=TOOL_TYPE_DEFAULT):
         self.num_links = 7
         assert root_dir is not None, 'root dir must be provided'
         assert psm_type is not None, 'psm type must be provided'
-        assert type(tool_id) == int, "tool id must be an integer, please check the tool id input"
+        #assert type(tool_id) == int, "tool id must be an integer, please check the tool id input"
         self.root_dir = root_dir
         self.psm_type = psm_type
         self.tool_id = tool_id
@@ -143,13 +148,14 @@ class PSMKinematicSolver:
     @staticmethod
     def is_tool_definition_available(tool_id: Union[str, int]) -> bool:
         #tool_id = int(tool_id)
-        available = False
+        '''available = False
         for tool in list(ToolType):
             if tool.value == tool_id:
                 available = True
                 break
         
-        return available
+        return available'''
+        return True
 
 
     @staticmethod
@@ -169,8 +175,13 @@ class PSMKinematicSolver:
             raise ValueError('incorrect joint type')
 
     def load_json_files(self):
+        self.psm_type = 420006
         psm_file_path = os.path.join(self.root_dir, 'kinematic', f'psm_{str(self.psm_type)}.json')
+
+        self.tool_id = 420006
         tool_file_list = glob(os.path.join(self.root_dir, 'tool', f'*{str(self.tool_id)}.json'))
+
+        print(tool_file_list)
         assert len(tool_file_list) == 1, 'multiple tool files, please check the json configuration files'
         tool_file_path = tool_file_list[0]
         psm_obj = load_json_dvrk(psm_file_path)

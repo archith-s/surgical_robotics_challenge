@@ -77,6 +77,7 @@ class PSM:
     def __init__(self, simulation_manager: SimulationManager, name, add_joint_errors=False, detect_tool_id=True, tool_id=PSM_TYPE_DEFAULT):
         self.simulation_manager = simulation_manager
         self.name = name
+        #self.base = self.simulation_manager.get_obj_handle(self.name + '/baselink', required=True)
         self.base = self.simulation_manager.get_obj_handle(self.name + '/baselink', required=True)
         self.tool_id_body = self.simulation_manager.get_obj_handle(name + '/tool_id', required=True)
 
