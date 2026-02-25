@@ -32,7 +32,7 @@ gravity:
 namespace: /ambf/env/psm1/
 
 BODY tool id:
-  name: tool_id/400006
+  name: tool_id/id_400006
   mesh: ''
   collision mesh: ''
   collision mesh type: ''

@@ -121,10 +121,24 @@ class ECM:
     def set_pose_changed(self):
         self._pose_changed = True
 
-    def _update_camera_pose(self):
-        print('camera_handle: ')
-        print(self.camera_handle)
+    '''def _update_camera_pose(self):
+        #print('camera_handle: ')
+        #print(self.camera_handle)
         self._T_c_w = self.camera_handle.get_pose()
+        self._T_w_c = self._T_c_w.Inverse()
+        self._pose_changed = False'''
+    
+    def _update_camera_pose(self):
+        # Get the pose (which is currently coming in as a numpy array)
+        pose = self.camera_handle.get_pose()
+        
+        # Check if it's a numpy array; if so, convert it to a PyKDL Frame
+        if isinstance(pose, np.ndarray):
+            from surgical_robotics_challenge.utils.utilities import convert_mat_to_frame
+            self._T_c_w = convert_mat_to_frame(pose)
+        else:
+            self._T_c_w = pose
+
         self._T_w_c = self._T_c_w.Inverse()
         self._pose_changed = False
 

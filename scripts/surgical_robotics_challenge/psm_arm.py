@@ -165,8 +165,22 @@ class PSM:
         self._update_base_pose()
         return self._T_w_b
 
-    def _update_base_pose(self):
+    '''def _update_base_pose(self):
         self._T_b_w = self.base.get_pose()
+        self._T_w_b = self._T_b_w.Inverse()'''
+    
+    def _update_base_pose(self):
+        # 1. Get the raw pose (NumPy array)
+        pose = self.base.get_pose()
+        
+        # 2. Convert to KDL Frame if it's a NumPy array
+        if isinstance(pose, np.ndarray):
+            from surgical_robotics_challenge.utils.utilities import convert_mat_to_frame
+            self._T_b_w = convert_mat_to_frame(pose)
+        else:
+            self._T_b_w = pose
+
+        # 3. Now .Inverse() will work
         self._T_w_b = self._T_b_w.Inverse()
 
     def run_grasp_logic(self, jaw_angle):

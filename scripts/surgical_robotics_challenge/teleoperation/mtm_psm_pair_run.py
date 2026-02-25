@@ -104,14 +104,17 @@ class ControllerInterface(Node):
         self._ecm.servo_jp(self.gui.jnt_cmds)
 
     def teleop_pair_1(self):
+        print('Teleop Pair 1')
         if self.leader_1.coag_button_pressed or self.leader_1.clutch_button_pressed:
             # self.leader.optimize_wrist_platform()
             f = Wrench()
             self.leader_1.servo_cf(f)
+            print("clutch")
         else:
             if self.leader_1.is_active():
+                print("active")
                 self.leader_1.servo_cp(self.leader_1.pre_coag_pose_msg)
-        twist = self.leader_1.measured_cv() * coordinate_frames.TeleopScale.scale_factor
+        twist = self.leader_1.measured_cv() * coordinate_frames.TeleopScale.scale_factor #Main telop logic make sure is relaying info
         self.cmd1_xyz = self.psm_1.T_t_b_home.p
         if not self.leader_1.clutch_button_pressed:
             delta_t = self._T1_c_b.M * twist.vel
@@ -125,6 +128,7 @@ class ControllerInterface(Node):
 
     def teleop_pair_2(self):
         if self.leader_2.coag_button_pressed or self.leader_2.clutch_button_pressed:
+            print("pressed")
             # self.leader.optimize_wrist_platform()
             f = Wrench()
             self.leader_2.servo_cf(f)
@@ -143,7 +147,7 @@ class ControllerInterface(Node):
             self.psm_2.servo_cp(self.T2_IK)
             self.psm_2.set_jaw_angle(self.leader_2.get_jaw_angle())
 
-    def update_arm_pose(self):
+    def update_arm_pose(self):  #PROBLEM FUNCTION - not taking MTM info and relaying it to PSM
         self.update_T_b_c()
         t1 = Thread(target=self.teleop_pair_1)
         t2 = Thread(target=self.teleop_pair_2)
@@ -187,27 +191,47 @@ class ControllerInterface(Node):
         # self.update_visual_markers()
 
 def wait_for_ambf_topics(node, timeout=20):
-    print("Waiting for AMBF topics to appear...")
+    print("Waiting for AMBF topics to appear and 'CameraFrame' to be registered...")
 
     SYSTEM_TOPICS = {"/parameter_events", "/rosout"}
+    # The topic name usually follows the pattern: /ambf/env/<object_name>/State
+    TARGET_PHRASE = "CameraFrame"
 
     start = time.time()
     while time.time() - start < timeout:
-        topics = {name for (name, _) in node.get_topic_names_and_types()}
+        topics_and_types = node.get_topic_names_and_types()
+        topics = {name for (name, _) in topics_and_types}
         
-        # Non-system topics mean AMBF is visible
+        # 1. Check if any AMBF topics exist at all
         non_system = topics - SYSTEM_TOPICS
-        if len(non_system) > 0:
-            print("AMBF topics detected!")
-            print("Sample topics:", list(non_system)[:5])
-            return
         
-        print("Still waiting... topics found:", topics)
+        # 2. Specifically look for the CameraFrame in the topic list
+        camera_found = any(TARGET_PHRASE in t for t in topics)
+
+        if len(non_system) > 0 and camera_found:
+            print(f"Success: AMBF detected and '{TARGET_PHRASE}' found!")
+            return
+        elif len(non_system) > 0 and not camera_found:
+            # Optional: Print a status update every few seconds
+            if int(time.time() - start) % 5 == 0:
+                print(f"AMBF is running, but '{TARGET_PHRASE}' isn't in the scene yet...")
+    
         time.sleep(0.5)
 
-    raise RuntimeError("AMBF topics never appeared. Discovery failed.")
+    raise RuntimeError(f"Timeout: AMBF topics appeared, but '{TARGET_PHRASE}' was never found.")
 
-
+def MTM_test(mtm, node):
+    import numpy as np
+    mtm.set_base_frame(Frame(Rotation.RPY(np.pi/2, 0, 0), Vector()))
+    while True:
+        while rclpy.ok():
+            rclpy.spin_once(node, timeout_sec=0.01)
+            if mtm.coag_button_pressed or mtm.clutch_button_pressed:
+                print('Pressed')
+                mtm.optimize_wrist_platform()
+            else:
+                if mtm.is_active():
+                    mtm.servo_cp(mtm.pre_coag_pose_msg)
 
 if __name__ == "__main__":
     parser = ArgumentParser()
@@ -238,7 +262,7 @@ if __name__ == "__main__":
 
     rclpy.init()
     SYSTEM_TOPICS = {"/parameter_events", "/rosout"}
-    node = rclpy.create_node("mtm_sim_teleop")
+    node = Node('test_mtm')
 
     wait_for_ambf_topics(node)
     simulation_manager = SimulationManager(parsed_args.client_name)
@@ -261,6 +285,7 @@ if __name__ == "__main__":
         print('LOADING CONTROLLER FOR ', arm_name)
         psm1 = PSM(simulation_manager, arm_name, add_joint_errors=False)
         if psm1.is_present():
+            print(psm1.base)
             T_psmtip_c = coordinate_frames.PSM1.T_tip_cam
             T_psmtip_b = psm1.get_T_w_b() * cam.get_T_c_w() * T_psmtip_c
             psm1.set_home_pose(T_psmtip_b)
@@ -296,20 +321,26 @@ if __name__ == "__main__":
         print('Exiting')
 
     else:
+
+        node = simulation_manager.get_node()
         leader_l = MTM('/MTML/', node)
         leader_r = MTM('/MTMR/', node)
+
+        #MTM_test(leader_l, node)
+
         leader_l.set_base_frame(Frame(Rotation.RPY((3.14 - 0.8) / 2, 0, 0), Vector(0, 0, 0)))
         leader_r.set_base_frame(Frame(Rotation.RPY((3.14 - 0.8) / 2, 0, 0), Vector(0, 0, 0)))
+
         controller1 = ControllerInterface(leader_l, leader_r, psm1, psm2, cam)
         controllers.append(controller1)
-
         rate = controller1.create_rate(200)
 
-        try:
+        try: #not getting into try block
             while rclpy.ok():
                 for cont in controllers:
                     cont.run()
-                rate.sleep()
+                #rate.sleep()
+                time.sleep(0.01)
         except Exception as e:
             print(e)
             print('Exception! Goodbye')

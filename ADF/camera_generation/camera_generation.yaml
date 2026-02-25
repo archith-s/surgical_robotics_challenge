@@ -1,0 +1,35 @@
+bodies: []
+joints: []
+
+# CAMERA COMMON CONFIG (mirrors world_stereo_test.yaml anchors)
+cam common configs:
+  clipping plane: &cam_common_clipping_plane
+    near: 0.001
+    far: 10.0
+  field of view: &cam_common_fov 1.2
+  publish image resolution: &cam_common_pub_img_res { width: 640, height: 480 }
+  publish depth resolution: &cam_common_pub_depth_res { width: 640, height: 480 }
+
+cameras: [cam0]
+
+# -- Cameras added by generate_camera_yaml.py will be appended below --
+
+cam0:
+  namespace: cameras/
+  name: cam0
+  controller: Camera
+  reliability: reliable
+  location: { x: -0.05, y: -0.0364, z: -0.05 }
+  look at: { x: 0.2246, y: 0, z: -0.9744 }
+  up: { x: 0.9744, y: 0, z: 0.2246 }
+  clipping plane: *cam_common_clipping_plane
+  field view angle: *cam_common_fov
+  monitor: 1
+  parent: BODY CameraFrame
+  publish image: True
+  publish image interval: 5
+  publish image resolution: *cam_common_pub_img_res
+  publish depth: True
+  publish depth resolution: *cam_common_pub_depth_res
+  multipass: True  # Set to True to enable shadows
+  mouse control multipliers: { pan: 0.1, rotate: 1.0, scroll: 0.1, arcball: 0.1 }
