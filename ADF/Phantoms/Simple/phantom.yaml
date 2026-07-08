@@ -3936,7 +3936,8 @@ BODY Needle:
   mesh: Needle.OBJ
   collision mesh: NeedleCollision.OBJ
   collision mesh type: CONVEX_HULL
-  mass: 0.5
+  #mass: 0.5
+  mass: 0
   collision margin: 0.0001
   scale: 1.0
   location:

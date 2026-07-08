@@ -24,5 +24,5 @@ multibody configs:
   #3D MED STRAIGHT PHANTOM
   - "ADF/Phantoms/3D_MED_STRAIGHT/phantom.yaml" #12
   - "ADF/Phantoms/3D_MED_STRAIGHT/ghosts.yaml" #13
-  #CAMERA GENERATION
-  - "ADF/camera_generation/camera_generation.yaml" #14
+  #GENERATED CAMERAS
+  - "ADF/Cameras/camera_generator.yaml" #14

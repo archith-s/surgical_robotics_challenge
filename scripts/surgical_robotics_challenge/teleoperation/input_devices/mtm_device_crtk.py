@@ -166,8 +166,8 @@ class MTM:
         twist_topic_name = name + 'measured_cv'
         joint_state_sub_topic_name = name + 'measured_js'
         gripper_topic_name = name + 'gripper/measured_js'
-        clutch_topic_name = '/console1/clutch'
-        coag_topic_name = '/console1/operator_present'
+        clutch_topic_name = '/console/clutch'
+        coag_topic_name = '/console/camera'
 
         pose_pub_topic_name = name + 'servo_cp'
         wrench_pub_topic_name = name + 'body/servo_cf'
