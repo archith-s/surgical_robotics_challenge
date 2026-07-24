@@ -72,7 +72,21 @@ if __name__ == "__main__":
     wait_for_ambf_topics(node)
 
     simulation_manager = SimulationManager(parsed_args.client_name)
-    cam = ECM(simulation_manager, 'CameraFrame')
+
+    # ECM(...) grabs the 'CameraFrame' object handle immediately, but the AMBF
+    # client discovers scene objects on a background thread after connect(),
+    # so the handle may not be ready yet. Retry until it resolves rather than
+    # racing it (a bare AttributeError is what you get if you don't).
+    cam = None
+    discover_timeout = 10
+    discover_start = time.time()
+    while time.time() - discover_start < discover_timeout:
+        if simulation_manager.get_obj_handle('CameraFrame') is not None:
+            cam = ECM(simulation_manager, 'CameraFrame')
+            break
+        time.sleep(0.5)
+    if cam is None:
+        raise RuntimeError("Timeout: 'CameraFrame' object handle never resolved in the AMBF client")
     time.sleep(0.5)
 
     psms = []
