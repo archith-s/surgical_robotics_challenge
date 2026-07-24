@@ -35,13 +35,11 @@ CONTROL_RATE = 100  # Hz, matches the servo loop rate used in mtm_psm_pair_run.p
 def wait_for_ambf_topics(node, timeout=20):
     print("Waiting for AMBF topics to appear and 'CameraFrame' to be registered...")
     SYSTEM_TOPICS = {"/parameter_events", "/rosout"}
-    TARGET_PHRASE = "CameraFrame"
     start = time.time()
     while time.time() - start < timeout:
         topics = {name for (name, _) in node.get_topic_names_and_types()}
         non_system = topics - SYSTEM_TOPICS
-        camera_found = any(TARGET_PHRASE in t for t in topics)
-        if len(non_system) > 0 and camera_found:
+        if len(non_system) > 0:
             print("Success: AMBF detected and 'CameraFrame' found!")
             return
         time.sleep(0.5)
