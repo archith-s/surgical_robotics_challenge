@@ -35,15 +35,40 @@ CONTROL_RATE = 100  # Hz, matches the servo loop rate used in mtm_psm_pair_run.p
 def wait_for_ambf_topics(node, timeout=20):
     print("Waiting for AMBF topics to appear and 'CameraFrame' to be registered...")
     SYSTEM_TOPICS = {"/parameter_events", "/rosout"}
+    TARGET_PHRASE = "CameraFrame"
     start = time.time()
     while time.time() - start < timeout:
         topics = {name for (name, _) in node.get_topic_names_and_types()}
         non_system = topics - SYSTEM_TOPICS
-        if len(non_system) > 0:
+        camera_found = any(TARGET_PHRASE in t for t in topics)
+        if len(non_system) > 0 and camera_found:
             print("Success: AMBF detected and 'CameraFrame' found!")
             return
         time.sleep(0.5)
     raise RuntimeError(f"Timeout: '{TARGET_PHRASE}' was never found.")
+
+
+def wait_for_psm_object_ready(simulation_manager, name, min_joints=8, timeout=15):
+    """
+    Poll the PSM's baselink object handle until its joint state has actually
+    synced (i.e. get_joint_names() reports the expected joints), *before*
+    constructing a PSM(...) -- PSM.__init__ commands joint 6/7 (jaw) as its
+    last step, and if the object's joint state hasn't arrived yet the client
+    reports "outside valid range [0 - -1]" (it thinks the object has zero
+    joints) and the command is silently dropped.
+    """
+    base_name = f'{name}/baselink'
+    start = time.time()
+    while time.time() - start < timeout:
+        handle = simulation_manager.get_obj_handle(base_name)
+        if handle is not None:
+            joint_names = handle.get_joint_names()
+            if joint_names and len(joint_names) >= min_joints:
+                return
+        time.sleep(0.2)
+    raise RuntimeError(
+        f"Timeout: '{base_name}' joint state never synced ({min_joints} joints expected). "
+        f"This is a transient AMBF discovery race -- try re-running.")
 
 
 def compute_home_tip_pose(psm, cam, psm_frame_cls):
@@ -78,7 +103,6 @@ if __name__ == "__main__":
     # publisher-registration collision between the two nodes.
     node = Node('center_psms_topic_check')
     wait_for_ambf_topics(node)
-
     simulation_manager = SimulationManager(parsed_args.client_name)
     # The AMBF client discovers scene objects on a background thread after
     # connect() -- give that thread a moment to populate the common object
@@ -118,14 +142,17 @@ if __name__ == "__main__":
 
     psms = []
     if parsed_args.run_psm_one:
+        wait_for_psm_object_ready(simulation_manager, 'psm1')
         psm1 = PSM(simulation_manager, 'psm1', add_joint_errors=False)
         if psm1.is_present():
             psms.append(('psm1', psm1))
     if parsed_args.run_psm_two:
+        wait_for_psm_object_ready(simulation_manager, 'psm2')
         psm2 = PSM(simulation_manager, 'psm2', add_joint_errors=False)
         if psm2.is_present():
             psms.append(('psm2', psm2))
     if parsed_args.run_psm_three:
+        wait_for_psm_object_ready(simulation_manager, 'psm3')
         psm3 = PSM(simulation_manager, 'psm3', add_joint_errors=False)
         if psm3.is_present():
             psms.append(('psm3', psm3))
