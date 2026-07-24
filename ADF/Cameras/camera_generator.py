@@ -52,9 +52,17 @@ import re
 # ---------------------------------------------------------------------------
 
 
+LOOK_AT = (0.0306997597, 0.1867316746, 0.7336420412) #PSM_MIDPOINT (avg of psm1/toolyawlink + psm2/toolyawlink, fully stretched)
 #LOOK_AT = (0.0307, 0.1695, 0.6978) #SIMPLE
 #LOOK_AT = (0.0043925177, 0.2601964176, 0.742035985) #STRAIGHT
 #LOOK_AT = (0.0564242899, 0.2649616003, .7395174503) #COMPLEX
+
+# Endoscope (cameraL, parented to BODY CameraFrame in world_stereo_test.yaml) gaze
+# direction in world frame, derived from CameraFrame's ADF pose
+# (0.0238510482, 0.3195584416, 0.8438282609) toward the phantom LOOK_AT it targets.
+# Used only by --endoscope-view cameras (they look along this direction instead of
+# orbiting inward toward LOOK_AT).
+ENDOSCOPE_GAZE_DIR = (0.032696, -0.716188, -0.696943)
 
 
 
@@ -157,11 +165,12 @@ cam common configs:
 
 
 
-def camera_block(index, x, y, z, ux, uy, uz, radius, theta, phi):
+def camera_block(index, x, y, z, ux, uy, uz, radius, theta, phi, look_at=None, label=None):
     name = f"camera_{index}"
-    lx, ly, lz = LOOK_AT
+    lx, ly, lz = look_at if look_at is not None else LOOK_AT
+    label_str = f" ({label})" if label else ""
     return (
-        f"# radius={radius}, theta={theta}deg (elevation), phi={phi}deg (azimuth)\n"
+        f"# radius={radius}, theta={theta}deg (elevation), phi={phi}deg (azimuth){label_str}\n"
         f"{name}:\n"
         f"  namespace: cameras/\n"
         f"  name: {name}\n"
@@ -175,7 +184,7 @@ def camera_block(index, x, y, z, ux, uy, uz, radius, theta, phi):
         f"  publish image interval: 5\n"
         f"  publish image resolution: *cam_common_pub_img_res\n"
         f"  publish depth: True\n"
-        f"  visible: False\n"
+        f"  visible: True\n"
         f"  publish depth resolution: *cam_common_pub_depth_res\n"
         f"  multipass: True\n"
         f"  mouse control multipliers: {{ pan: 0.1, rotate: 1.0, scroll: 0.1, arcball: 0.1 }}\n"
@@ -246,6 +255,11 @@ def main():
                         help="Output YAML file (default: camera_generator.yaml)")
     parser.add_argument("--reset", action="store_true",
                         help="Delete the output file and start fresh (no camera added).")
+    parser.add_argument("--endoscope-view", action="store_true",
+                        help="Look along the endoscope's (cameraL) gaze direction "
+                             "(ENDOSCOPE_GAZE_DIR) instead of orbiting inward toward LOOK_AT.")
+    parser.add_argument("--label", type=str, default=None,
+                        help="Optional human-readable tag appended to the generated comment.")
 
 
     args = parser.parse_args()
@@ -276,7 +290,15 @@ def main():
     z = LOOK_AT[2] + dz
 
 
-    ux, uy, uz = compute_up_vector(dx, dy, dz)
+    if args.endoscope_view:
+        gx, gy, gz = ENDOSCOPE_GAZE_DIR
+        look_at = (x + gx, y + gy, z + gz)
+        # up must be perpendicular to the actual gaze direction being used here,
+        # not the orbit-inward direction (-dx, -dy, -dz).
+        ux, uy, uz = compute_up_vector(-gx, -gy, -gz)
+    else:
+        look_at = None
+        ux, uy, uz = compute_up_vector(dx, dy, dz)
 
 
     cameras, text = read_existing(args.output)
@@ -285,7 +307,8 @@ def main():
     cameras.append(new_name)
 
 
-    block = camera_block(index, x, y, z, ux, uy, uz, args.radius, args.theta, args.phi)
+    block = camera_block(index, x, y, z, ux, uy, uz, args.radius, args.theta, args.phi,
+                          look_at=look_at, label=args.label)
 
 
     if not text:
@@ -294,7 +317,7 @@ def main():
         append_to_existing(args.output, cameras, text, block)
 
 
-    lx, ly, lz = LOOK_AT
+    lx, ly, lz = look_at if look_at is not None else LOOK_AT
     print(f"Added '{new_name}' to '{args.output}'")
     print(f"  Position : x={fmt(x)}, y={fmt(y)}, z={fmt(z)}")
     print(f"  Up vector: x={fmt(ux)}, y={fmt(uy)}, z={fmt(uz)}")
