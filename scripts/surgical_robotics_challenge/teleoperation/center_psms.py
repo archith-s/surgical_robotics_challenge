@@ -73,20 +73,30 @@ if __name__ == "__main__":
 
     simulation_manager = SimulationManager(parsed_args.client_name)
 
-    # ECM(...) grabs the 'CameraFrame' object handle immediately, but the AMBF
-    # client discovers scene objects on a background thread after connect(),
-    # so the handle may not be ready yet. Retry until it resolves rather than
-    # racing it (a bare AttributeError is what you get if you don't).
+    # ECM(...) grabs the object handle immediately, but the AMBF client
+    # discovers scene objects on a background thread after connect(), so the
+    # handle may not be ready yet -- retry rather than racing it. Also, the
+    # handle is looked up by name *relative to the common object namespace*,
+    # and 'CameraFrame' lives at different depths depending on which ADF/world
+    # is loaded (top-level in the standard launch; nested under 'phantom/' in
+    # scenes built around camera_generator.py's custom camera rig) -- so try
+    # both.
+    CAMERA_NAME_CANDIDATES = ['CameraFrame', 'phantom/CameraFrame']
     cam = None
     discover_timeout = 10
     discover_start = time.time()
     while time.time() - discover_start < discover_timeout:
-        if simulation_manager.get_obj_handle('CameraFrame') is not None:
-            cam = ECM(simulation_manager, 'CameraFrame')
+        for candidate in CAMERA_NAME_CANDIDATES:
+            if simulation_manager.get_obj_handle(candidate) is not None:
+                cam = ECM(simulation_manager, candidate)
+                print(f"Resolved camera object as '{candidate}'")
+                break
+        if cam is not None:
             break
         time.sleep(0.5)
     if cam is None:
-        raise RuntimeError("Timeout: 'CameraFrame' object handle never resolved in the AMBF client")
+        raise RuntimeError(
+            f"Timeout: none of {CAMERA_NAME_CANDIDATES} resolved in the AMBF client")
     time.sleep(0.5)
 
     psms = []
