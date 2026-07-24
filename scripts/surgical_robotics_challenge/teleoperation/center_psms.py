@@ -2,9 +2,12 @@
 # //==============================================================================
 # Standalone utility: drive PSM tool tips to a standardized, centered pose.
 #
-# Commands each requested PSM's tip to sit `--reach` meters straight out
-# along the camera boresight (i.e. dead-center of the camera image), using
-# the same tip orientation convention as coordinate_frames.PSM1/2/3.T_tip_cam.
+# Commands each requested PSM's tip to the same "home" pose that
+# mtm_psm_pair_run.py drives it to when the MTM coag button is pressed:
+#   T_tip_b = psm.get_T_w_b() * cam.get_T_c_w() * coordinate_frames.PSM{1,2,3}.T_tip_cam
+# using that PSM's own T_tip_cam (which is what gives PSM1/PSM2/PSM3 their
+# distinct left/right offsets in front of the camera -- collapsing them all
+# to one shared transform makes every arm converge on the same point).
 # This does not touch any existing script or file -- it's a one-shot pose
 # command you run on top of a running AMBF/surgical_robotics_challenge sim.
 # //==============================================================================
@@ -13,12 +16,20 @@ from argparse import ArgumentParser
 
 import rclpy
 from rclpy.node import Node
-from PyKDL import Frame, Vector
 
 from surgical_robotics_challenge.simulation_manager import SimulationManager
 from surgical_robotics_challenge.psm_arm import PSM
 from surgical_robotics_challenge.ecm_arm import ECM
 from surgical_robotics_challenge.utils import coordinate_frames
+from surgical_robotics_challenge.utils.utilities import convert_mat_to_frame
+
+PSM_TIP_CAM_FRAMES = {
+    'psm1': coordinate_frames.PSM1,
+    'psm2': coordinate_frames.PSM2,
+    'psm3': coordinate_frames.PSM3,
+}
+
+CONTROL_RATE = 100  # Hz, matches the servo loop rate used in mtm_psm_pair_run.py
 
 
 def wait_for_ambf_topics(node, timeout=20):
@@ -37,24 +48,20 @@ def wait_for_ambf_topics(node, timeout=20):
     raise RuntimeError(f"Timeout: '{TARGET_PHRASE}' was never found.")
 
 
-def compute_centered_tip_pose(psm, cam, reach_m):
+def compute_home_tip_pose(psm, cam, psm_frame_cls):
     """
-    Tip pose (in the PSM's base frame) that sits `reach_m` meters straight
-    out along the camera boresight, i.e. dead-center of the camera image,
-    regardless of where this PSM's base happens to be mounted.
+    Tip pose (in the PSM's base frame) matching the same coag-button home
+    pose used in mtm_psm_pair_run.py, using this PSM's own T_tip_cam so its
+    left/right offset from the camera boresight is preserved.
     """
-    T_cam_to_base = psm.get_T_w_b() * cam.get_T_c_w()
-    T_target_cam = Frame(coordinate_frames.PSM1.T_tip_cam.M, Vector(0.0, 0.0, -reach_m))
-    return T_cam_to_base * T_target_cam
+    return psm.get_T_w_b() * cam.get_T_c_w() * psm_frame_cls.T_tip_cam
 
 
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument('-c', action='store', dest='client_name', help='Client Name', default='center_psms')
-    parser.add_argument('--reach', action='store', dest='reach', type=float, default=0.12,
-                         help='Standardized tip distance in front of the camera, in meters (default 0.12)')
-    parser.add_argument('--execute-time', action='store', dest='execute_time', type=float, default=1.5,
-                         help='Seconds to smoothly interpolate to the target pose (default 1.5)')
+    parser.add_argument('--settle-time', action='store', dest='settle_time', type=float, default=2.0,
+                         help='Seconds to continuously servo toward the target pose (default 2.0)')
     parser.add_argument('--one', action='store', dest='run_psm_one', help='Move PSM1', default=True)
     parser.add_argument('--two', action='store', dest='run_psm_two', help='Move PSM2', default=True)
     parser.add_argument('--three', action='store', dest='run_psm_three', help='Move PSM3', default=False)
@@ -68,10 +75,21 @@ if __name__ == "__main__":
             setattr(parsed_args, opt, False)
 
     rclpy.init()
-    node = Node('center_psms')
+    # Distinct name from the AMBF client node below (parsed_args.client_name,
+    # default 'center_psms') -- reusing the same name causes a rosout
+    # publisher-registration collision between the two nodes.
+    node = Node('center_psms_topic_check')
     wait_for_ambf_topics(node)
 
     simulation_manager = SimulationManager(parsed_args.client_name)
+    # The AMBF client discovers scene objects on a background thread after
+    # connect() -- give that thread a moment to populate the common object
+    # namespace before we start looking anything up (same pattern as
+    # ObjectControl.__init__ in object_control_gui.py, which sleeps right
+    # after connect() for the same reason). Skipping this is what causes the
+    # "NAMED OBJECT NOT FOUND" storm where every single lookup fails because
+    # the namespace crawl never finished in time.
+    time.sleep(1.0)
 
     # ECM(...) grabs the object handle immediately, but the AMBF client
     # discovers scene objects on a background thread after connect(), so the
@@ -83,7 +101,7 @@ if __name__ == "__main__":
     # both.
     CAMERA_NAME_CANDIDATES = ['CameraFrame', 'phantom/CameraFrame']
     cam = None
-    discover_timeout = 10
+    discover_timeout = 25
     discover_start = time.time()
     while time.time() - discover_start < discover_timeout:
         for candidate in CAMERA_NAME_CANDIDATES:
@@ -96,7 +114,8 @@ if __name__ == "__main__":
         time.sleep(0.5)
     if cam is None:
         raise RuntimeError(
-            f"Timeout: none of {CAMERA_NAME_CANDIDATES} resolved in the AMBF client")
+            f"Timeout: none of {CAMERA_NAME_CANDIDATES} resolved in the AMBF client. "
+            f"This is usually a transient AMBF namespace-discovery race -- try re-running.")
     time.sleep(0.5)
 
     psms = []
@@ -116,15 +135,27 @@ if __name__ == "__main__":
     if len(psms) == 0:
         print('No Valid PSM Arms Specified')
     else:
+        targets = {}
         for name, psm in psms:
-            T_target_b = compute_centered_tip_pose(psm, cam, parsed_args.reach)
-            print(f'{name}: commanding tip to {T_target_b.p}, reach={parsed_args.reach} m')
-            psm.move_cp(T_target_b, execute_time=parsed_args.execute_time)
+            T_target_b = compute_home_tip_pose(psm, cam, PSM_TIP_CAM_FRAMES[name])
+            targets[name] = T_target_b
+            print(f'{name}: commanding tip to {T_target_b.p}')
 
-        time.sleep(parsed_args.execute_time + 0.5)
+        # Continuously re-issue servo_cp for settle_time, same mechanism
+        # mtm_psm_pair_run.py's control loop and object_control_gui.py's
+        # ObjectControl.run() loop use -- repeatedly commanding the pose
+        # every cycle rather than firing a single interpolated move and
+        # walking away from it.
+        control_period = 1.0 / CONTROL_RATE
+        start_time = time.time()
+        while time.time() - start_time < parsed_args.settle_time:
+            for name, psm in psms:
+                psm.servo_cp(targets[name])
+            time.sleep(control_period)
 
         for name, psm in psms:
-            print(f'{name}: measured tip pose = {psm.measured_cp().p}')
+            measured = convert_mat_to_frame(psm.measured_cp())
+            print(f'{name}: measured tip pose = {measured.p}')
 
     node.destroy_node()
     rclpy.shutdown()
