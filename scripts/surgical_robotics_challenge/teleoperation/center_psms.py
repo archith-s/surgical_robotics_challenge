@@ -9,12 +9,18 @@
 # distinct left/right offsets in front of the camera -- collapsing them all
 # to one shared transform makes every arm converge on the same point).
 #
-# Startup here intentionally mirrors mtm_psm_pair_run.py line for line: wait
-# for ambf topics (including CameraFrame) to be published, build the
-# SimulationManager, construct ECM('CameraFrame') and then each PSM directly
-# with no extra polling/retry logic layered on top -- that script is the
-# proven-reliable reference, so this one doesn't invent its own startup
-# sequence.
+# Startup mirrors mtm_psm_pair_run.py (wait for ambf topics, build the
+# SimulationManager, construct ECM('CameraFrame') and each PSM), but adds
+# retries around two AMBF-client races that surfaced as intermittent
+# "NAMED OBJECT NOT FOUND" / "outside valid range" crashes -- see
+# resolve_simulation_manager() and wait_for_psm_joint_state() below. Those
+# races live in SimulationManager/Client.connect() itself (ambf_client.py's
+# create_objs_from_rostopics() takes a single, immediate snapshot of
+# published topics the instant its node is created, with no settle time for
+# that fresh node's DDS discovery to catch up with the rest of the sim), so
+# mtm_psm_pair_run.py and control_object.py are exposed to the same races --
+# this file just works around them locally instead of patching the shared
+# client.
 # //==============================================================================
 import time
 from argparse import ArgumentParser
@@ -65,6 +71,59 @@ def wait_for_ambf_topics(node, timeout=20):
     raise RuntimeError(f"Timeout: AMBF topics appeared, but '{TARGET_PHRASE}' was never found.")
 
 
+def resolve_simulation_manager(base_client_name, required_names, timeout=25, retry_delay=1.0):
+    """
+    SimulationManager(...) -> Client.connect() creates a brand-new rclpy
+    node/DDS participant and, in the same call, immediately snapshots
+    get_published_topics() -- with no settle time for that new participant's
+    discovery to catch up with everything already running in the sim. That
+    snapshot is frozen forever into the object dict (get_obj_handle never
+    re-queries the graph), so if it missed an object, no amount of retrying
+    get_obj_handle() on the *same* SimulationManager will ever find it.
+    Only a brand-new connection attempt (a fresh node) has a chance at a
+    fuller snapshot -- so retry the whole connection, not just the lookup.
+    """
+    attempt = 0
+    start = time.time()
+    while True:
+        attempt += 1
+        # Distinct node name per attempt -- reusing a name whose previous
+        # attempt's node is still alive in this process causes a rosout
+        # publisher-registration collision.
+        simulation_manager = SimulationManager(f'{base_client_name}_{attempt}')
+        missing = [name for name in required_names if simulation_manager.get_obj_handle(name) is None]
+        if not missing:
+            return simulation_manager
+        print(f"Connection attempt {attempt}: {missing} not yet discovered, reconnecting...")
+        if time.time() - start > timeout:
+            raise RuntimeError(
+                f"Timeout: {missing} never appeared after {attempt} connection attempts. "
+                f"This is the AMBF client's topic-discovery race -- try re-running.")
+        time.sleep(retry_delay)
+
+
+def wait_for_psm_joint_state(simulation_manager, name, min_joints=8, timeout=15):
+    """
+    Poll the PSM's baselink handle until its State message has actually
+    arrived (get_joint_names() reports the expected joints) *before*
+    constructing PSM(...) -- PSM.__init__ commands joint 6/7 (jaw) as its
+    last step, and if no State message has arrived yet the object reports
+    zero joints, so the client logs "outside valid range [0 - -1]" and the
+    command is silently dropped.
+    """
+    base_name = f'{name}/baselink'
+    start = time.time()
+    while time.time() - start < timeout:
+        handle = simulation_manager.get_obj_handle(base_name)
+        joint_names = handle.get_joint_names() if handle is not None else None
+        if joint_names and len(joint_names) >= min_joints:
+            return
+        time.sleep(0.2)
+    raise RuntimeError(
+        f"Timeout: '{base_name}' joint state never synced ({min_joints} joints expected). "
+        f"This is a transient AMBF discovery race -- try re-running.")
+
+
 def compute_home_tip_pose(psm, cam, psm_frame_cls):
     """
     Tip pose (in the PSM's base frame) matching the same coag-button home
@@ -92,34 +151,35 @@ if __name__ == "__main__":
     parser.add_argument('--three', action='store', dest='run_psm_three', help='Move PSM3', default=False)
     parsed_args = parser.parse_args()
 
+    psm_names = []
+    if _parse_bool(parsed_args.run_psm_one):
+        psm_names.append('psm1')
+    if _parse_bool(parsed_args.run_psm_two):
+        psm_names.append('psm2')
+    if _parse_bool(parsed_args.run_psm_three):
+        psm_names.append('psm3')
+
     rclpy.init()
-    # Distinct name from the AMBF client node below (parsed_args.client_name,
+    # Distinct name from the AMBF client node(s) below (parsed_args.client_name,
     # default 'center_psms') -- reusing the same name causes a rosout
     # publisher-registration collision between the two nodes.
     node = Node('center_psms_topic_check')
 
     wait_for_ambf_topics(node)
-    simulation_manager = SimulationManager(parsed_args.client_name)
+
+    required_names = ['CameraFrame'] + [f'{name}/baselink' for name in psm_names]
+    simulation_manager = resolve_simulation_manager(parsed_args.client_name, required_names)
 
     cam = ECM(simulation_manager, 'CameraFrame')
 
     time.sleep(0.5)
 
     psms = []
-    if _parse_bool(parsed_args.run_psm_one):
-        psm1 = PSM(simulation_manager, 'psm1', add_joint_errors=False)
-        if psm1.is_present():
-            psms.append(('psm1', psm1))
-
-    if _parse_bool(parsed_args.run_psm_two):
-        psm2 = PSM(simulation_manager, 'psm2', add_joint_errors=False)
-        if psm2.is_present():
-            psms.append(('psm2', psm2))
-
-    if _parse_bool(parsed_args.run_psm_three):
-        psm3 = PSM(simulation_manager, 'psm3', add_joint_errors=False)
-        if psm3.is_present():
-            psms.append(('psm3', psm3))
+    for name in psm_names:
+        wait_for_psm_joint_state(simulation_manager, name)
+        psm = PSM(simulation_manager, name, add_joint_errors=False)
+        if psm.is_present():
+            psms.append((name, psm))
 
     if len(psms) == 0:
         print('No Valid PSM Arms Specified')
