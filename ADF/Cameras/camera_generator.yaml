@@ -20,11 +20,11 @@ cam common configs:
 
 cameras: [camera_0, camera_1, camera_2, camera_3, camera_4]
 
-# radius=0.02, theta=45.0deg (elevation), phi=90.0deg (azimuth) (front)
+# radius=0.04, theta=45.0deg (elevation), phi=90.0deg (azimuth) (front)
 camera_0:
   namespace: cameras/
   name: camera_0
-  location: { x: 0.0307, y: 0.200874, z: 0.747784 }
+  location: { x: 0.0307, y: 0.215016, z: 0.761926 }
   look at: { x: 0.0307, y: 0.186732, z: 0.733642 }
   up: { x: 0, y: -0.707107, z: 0.707107 }
   clipping plane: *cam_common_clipping_plane
@@ -38,11 +38,11 @@ camera_0:
   publish depth resolution: *cam_common_pub_depth_res
   multipass: True
   mouse control multipliers: { pan: 0.1, rotate: 1.0, scroll: 0.1, arcball: 0.1 }
-# radius=0.02, theta=45.0deg (elevation), phi=0.0deg (azimuth) (side 1)
+# radius=0.04, theta=45.0deg (elevation), phi=0.0deg (azimuth) (side 1)
 camera_1:
   namespace: cameras/
   name: camera_1
-  location: { x: 0.044842, y: 0.186732, z: 0.747784 }
+  location: { x: 0.058984, y: 0.186732, z: 0.761926 }
   look at: { x: 0.0307, y: 0.186732, z: 0.733642 }
   up: { x: -0.707107, y: 0, z: 0.707107 }
   clipping plane: *cam_common_clipping_plane
@@ -56,11 +56,11 @@ camera_1:
   publish depth resolution: *cam_common_pub_depth_res
   multipass: True
   mouse control multipliers: { pan: 0.1, rotate: 1.0, scroll: 0.1, arcball: 0.1 }
-# radius=0.02, theta=45.0deg (elevation), phi=-90.0deg (azimuth) (back)
+# radius=0.04, theta=45.0deg (elevation), phi=-90.0deg (azimuth) (back)
 camera_2:
   namespace: cameras/
   name: camera_2
-  location: { x: 0.0307, y: 0.17259, z: 0.747784 }
+  location: { x: 0.0307, y: 0.158447, z: 0.761926 }
   look at: { x: 0.0307, y: 0.186732, z: 0.733642 }
   up: { x: 0, y: 0.707107, z: 0.707107 }
   clipping plane: *cam_common_clipping_plane
@@ -74,11 +74,11 @@ camera_2:
   publish depth resolution: *cam_common_pub_depth_res
   multipass: True
   mouse control multipliers: { pan: 0.1, rotate: 1.0, scroll: 0.1, arcball: 0.1 }
-# radius=0.02, theta=45.0deg (elevation), phi=180.0deg (azimuth) (side 2)
+# radius=0.04, theta=45.0deg (elevation), phi=180.0deg (azimuth) (side 2)
 camera_3:
   namespace: cameras/
   name: camera_3
-  location: { x: 0.016558, y: 0.186732, z: 0.747784 }
+  location: { x: 0.002415, y: 0.186732, z: 0.761926 }
   look at: { x: 0.0307, y: 0.186732, z: 0.733642 }
   up: { x: 0.707107, y: 0, z: 0.707107 }
   clipping plane: *cam_common_clipping_plane
@@ -92,11 +92,11 @@ camera_3:
   publish depth resolution: *cam_common_pub_depth_res
   multipass: True
   mouse control multipliers: { pan: 0.1, rotate: 1.0, scroll: 0.1, arcball: 0.1 }
-# radius=0.1, theta=90.0deg (elevation), phi=180.0deg (azimuth) (top-down, upside-down)
+# radius=0.04, theta=90.0deg (elevation), phi=180.0deg (azimuth) (top-down, upside-down)
 camera_4:
   namespace: cameras/
   name: camera_4
-  location: { x: 0.0307, y: 0.186732, z: 0.833642 }
+  location: { x: 0.0307, y: 0.186732, z: 0.773642 }
   look at: { x: 0.0307, y: 0.186732, z: 0.733642 }
   up: { x: 0, y: -1, z: 0 }
   clipping plane: *cam_common_clipping_plane
