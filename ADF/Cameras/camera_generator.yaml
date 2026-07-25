@@ -24,13 +24,13 @@ cam common configs:
 
 cameras: [camera_0, camera_1, camera_2, camera_3, camera_4]
 
-# radius=0.002, theta=0.0deg (elevation), phi=-90.0deg (azimuth) (front, matches cameraL gaze)
+# radius=0.02, theta=45.0deg (elevation), phi=90.0deg (azimuth) (front)
 camera_0:
   namespace: cameras/
   name: camera_0
-  location: { x: 0.030693, y: 0.188017, z: 0.735174 }
-  look at: { x: 0.033931, y: -0.454757, z: -0.030875 }
-  up: { x: 0.000004, y: -0.766053, z: 0.642777 }
+  location: { x: 0.030746, y: 0.166808, z: 0.731899 }
+  look at: { x: 0.0307, y: 0.186732, z: 0.733642 }
+  up: { x: -0.002287, y: -0.087171, z: 0.996191 }
   clipping plane: *cam_common_clipping_plane
   field view angle: *cam_common_fov
   monitor: 1
@@ -42,13 +42,13 @@ camera_0:
   publish depth resolution: *cam_common_pub_depth_res
   multipass: True
   mouse control multipliers: { pan: 0.1, rotate: 1.0, scroll: 0.1, arcball: 0.1 }
-# radius=0.002, theta=0.0deg (elevation), phi=90.0deg (azimuth) (back)
+# radius=0.02, theta=45.0deg (elevation), phi=0.0deg (azimuth) (side 1)
 camera_1:
   namespace: cameras/
   name: camera_1
-  location: { x: 0.030706, y: 0.185446, z: 0.73211 }
+  location: { x: 0.044842, y: 0.175928, z: 0.742767 }
   look at: { x: 0.0307, y: 0.186732, z: 0.733642 }
-  up: { x: 0.000004, y: -0.766053, z: 0.642777 }
+  up: { x: -0.7071, y: -0.543155, z: 0.45276 }
   clipping plane: *cam_common_clipping_plane
   field view angle: *cam_common_fov
   monitor: 1
@@ -60,13 +60,13 @@ camera_1:
   publish depth resolution: *cam_common_pub_depth_res
   multipass: True
   mouse control multipliers: { pan: 0.1, rotate: 1.0, scroll: 0.1, arcball: 0.1 }
-# radius=0.002, theta=0.0deg (elevation), phi=0.0deg (azimuth) (left)
+# radius=0.02, theta=45.0deg (elevation), phi=-90.0deg (azimuth) (back)
 camera_2:
   namespace: cameras/
   name: camera_2
-  location: { x: 0.0327, y: 0.186736, z: 0.733647 }
+  location: { x: 0.030654, y: 0.184988, z: 0.753566 }
   look at: { x: 0.0307, y: 0.186732, z: 0.733642 }
-  up: { x: 0.000004, y: -0.766053, z: 0.642777 }
+  up: { x: 0.002292, y: -0.996191, z: -0.087166 }
   clipping plane: *cam_common_clipping_plane
   field view angle: *cam_common_fov
   monitor: 1
@@ -78,13 +78,13 @@ camera_2:
   publish depth resolution: *cam_common_pub_depth_res
   multipass: True
   mouse control multipliers: { pan: 0.1, rotate: 1.0, scroll: 0.1, arcball: 0.1 }
-# radius=0.002, theta=0.0deg (elevation), phi=180.0deg (azimuth) (right)
+# radius=0.02, theta=45.0deg (elevation), phi=180.0deg (azimuth) (side 2)
 camera_3:
   namespace: cameras/
   name: camera_3
-  location: { x: 0.0287, y: 0.186728, z: 0.733637 }
+  location: { x: 0.016558, y: 0.175869, z: 0.742697 }
   look at: { x: 0.0307, y: 0.186732, z: 0.733642 }
-  up: { x: 0.000004, y: -0.766053, z: 0.642777 }
+  up: { x: 0.707106, y: -0.540208, z: 0.456264 }
   clipping plane: *cam_common_clipping_plane
   field view angle: *cam_common_fov
   monitor: 1
@@ -96,13 +96,13 @@ camera_3:
   publish depth resolution: *cam_common_pub_depth_res
   multipass: True
   mouse control multipliers: { pan: 0.1, rotate: 1.0, scroll: 0.1, arcball: 0.1 }
-# radius=0.002, theta=90.0deg (elevation), phi=0.0deg (azimuth) (top-down)
+# radius=0.1, theta=90.0deg (elevation), phi=180.0deg (azimuth) (top-down, upside-down)
 camera_4:
   namespace: cameras/
   name: camera_4
-  location: { x: 0.0307, y: 0.1852, z: 0.734928 }
+  location: { x: 0.0307, y: 0.110126, z: 0.79792 }
   look at: { x: 0.0307, y: 0.186732, z: 0.733642 }
-  up: { x: 0.003238, y: -0.642774, z: -0.766049 }
+  up: { x: -0.003238, y: 0.642774, z: 0.766049 }
   clipping plane: *cam_common_clipping_plane
   field view angle: *cam_common_fov
   monitor: 1

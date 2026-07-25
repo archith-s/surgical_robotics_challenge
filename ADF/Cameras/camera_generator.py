@@ -20,6 +20,7 @@ world frame. See those constants for how they were derived.
 
 Usage:
     python camera_generator.py -r 0.002 -t 90 -p 0     # top-down view (along U_AXIS)
+    python camera_generator.py -r 0.002 -t 90 -p 180   # top-down, upside-down (same position, rolled 180 deg)
     python camera_generator.py -r 0.002 -t 0  -p 0      # side 1 (along +S_AXIS)
     python camera_generator.py -r 0.002 -t 0  -p 180    # side 2 (along -S_AXIS)
     python camera_generator.py -r 0.002 -t 0  -p 90     # back  (along +F_AXIS, distal)
@@ -40,6 +41,11 @@ Angle convention (elevation + azimuth), all relative to the local (S, F, U) basi
          90 = +F_AXIS       (distal/"back": further along the direction both tools insert toward)
         180 = -S_AXIS side  (toward psm2's tip)
         -90 = -F_AXIS       (proximal/"front": back toward where the tools — and endoscope — come from)
+
+                    At theta=90 (the pole / top-down), phi no longer affects
+                    position (it's degenerate there) — it instead rolls the
+                    camera around its look axis. 0=default up (F_AXIS-aligned),
+                    180=upside-down, other values=arbitrary roll.
 
 
 Internal mapping: standard spherical theta = 90 - elevation
@@ -131,12 +137,20 @@ def spherical_to_cartesian(r: float, elevation: float, phi_deg: float):
 
 
 
-def compute_up_vector(dx: float, dy: float, dz: float):
+def compute_up_vector(dx: float, dy: float, dz: float, phi_deg: float = 0.0):
     """
     Compute an up vector perpendicular to the look-at direction.
     Uses U_AXIS as primary reference (true vertical relative to the measured
     tool-frame basis, not world +Z). Falls back to F_AXIS at poles (i.e. when
     looking straight along U_AXIS, such as the top-down camera).
+
+    At the pole, phi has no effect on camera *position* (the S/F terms drop
+    to zero), so it's repurposed there as a roll angle: the fallback up
+    vector is rotated by phi degrees around the look axis. phi=0 reproduces
+    the original F_AXIS-aligned up vector; phi=180 flips it (upside-down);
+    other values roll the image by that many degrees. Away from the pole,
+    phi already determines position/orientation via spherical_to_cartesian,
+    so this rotation is not applied there.
     """
     length = math.sqrt(dx*dx + dy*dy + dz*dz)
     if length == 0:
@@ -150,7 +164,8 @@ def compute_up_vector(dx: float, dy: float, dz: float):
     # Primary up reference: U_AXIS (measured tool-frame vertical)
     wx, wy, wz = U_AXIS
     dot = lx*wx + ly*wy + lz*wz
-    if abs(dot) > 0.999:
+    at_pole = abs(dot) > 0.999
+    if at_pole:
         # Looking straight along U_AXIS (e.g. top-down) — fall back to F_AXIS
         wx, wy, wz = F_AXIS
         dot = lx*wx + ly*wy + lz*wz
@@ -163,7 +178,25 @@ def compute_up_vector(dx: float, dy: float, dz: float):
 
 
     u_len = math.sqrt(ux*ux + uy*uy + uz*uz)
-    return ux / u_len, uy / u_len, uz / u_len
+    ux, uy, uz = ux / u_len, uy / u_len, uz / u_len
+
+
+    if at_pole and phi_deg:
+        # Roll the up vector by phi degrees around the look axis (Rodrigues'
+        # rotation restricted to the plane perpendicular to the look dir,
+        # since (ux,uy,uz) is already unit length and orthogonal to it).
+        theta = math.radians(phi_deg)
+        kx, ky, kz = lx, ly, lz
+        # k x up
+        cx = ky*uz - kz*uy
+        cy = kz*ux - kx*uz
+        cz = kx*uy - ky*ux
+        ux, uy, uz = (ux*math.cos(theta) + cx*math.sin(theta),
+                      uy*math.cos(theta) + cy*math.sin(theta),
+                      uz*math.cos(theta) + cz*math.sin(theta))
+
+
+    return ux, uy, uz
 
 
 
@@ -298,7 +331,9 @@ def main():
                              "0=side-on (in the S/F plane) (default: 90)")
     parser.add_argument("--phi", "-p", type=float, default=0.0,
                         help="Azimuthal angle [-180, 180]: 0=+S_AXIS, 90=+F_AXIS (back), "
-                             "180=-S_AXIS, -90=-F_AXIS (front) (default: 0)")
+                             "180=-S_AXIS, -90=-F_AXIS (front). At theta=90 (top-down) this "
+                             "instead rolls the camera about its look axis: 0=default up, "
+                             "180=upside-down (default: 0)")
     parser.add_argument("--output", "-o", type=str, default="camera_generator.yaml",
                         help="Output YAML file (default: camera_generator.yaml)")
     parser.add_argument("--reset", action="store_true",
@@ -344,10 +379,10 @@ def main():
         look_at = (x + gx, y + gy, z + gz)
         # up must be perpendicular to the actual gaze direction being used here,
         # not the orbit-inward direction (-dx, -dy, -dz).
-        ux, uy, uz = compute_up_vector(-gx, -gy, -gz)
+        ux, uy, uz = compute_up_vector(-gx, -gy, -gz, args.phi)
     else:
         look_at = None
-        ux, uy, uz = compute_up_vector(dx, dy, dz)
+        ux, uy, uz = compute_up_vector(dx, dy, dz, args.phi)
 
 
     cameras, text = read_existing(args.output)
