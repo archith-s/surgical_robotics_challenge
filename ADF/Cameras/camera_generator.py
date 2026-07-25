@@ -53,7 +53,6 @@ import re
 
 
 LOOK_AT = (0.030643486718087462, 0.1907992689831996, 0.7392410758681308) #GRIPPER_MIDPOINT (avg of psm1/toolpitchlink + psm2/toolpitchlink)
-#LOOK_AT = (0.0306997597, 0.1867316746, 0.7336420412) #PSM_MIDPOINT (avg of psm1/toolyawlink + psm2/toolyawlink, fully stretched)
 #LOOK_AT = (0.0307, 0.1695, 0.6978) #SIMPLE
 #LOOK_AT = (0.0043925177, 0.2601964176, 0.742035985) #STRAIGHT
 #LOOK_AT = (0.0564242899, 0.2649616003, .7395174503) #COMPLEX
@@ -211,7 +210,7 @@ def camera_block(index, x, y, z, ux, uy, uz, radius, theta, phi, look_at=None, l
         f"  publish image interval: 5\n"
         f"  publish image resolution: *cam_common_pub_img_res\n"
         f"  publish depth: True\n"
-        f"  visible: True\n"
+        f"  visible: False\n"
         f"  publish depth resolution: *cam_common_pub_depth_res\n"
         f"  multipass: True\n"
         f"  mouse control multipliers: {{ pan: 0.1, rotate: 1.0, scroll: 0.1, arcball: 0.1 }}\n"

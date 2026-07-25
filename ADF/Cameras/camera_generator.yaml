@@ -34,7 +34,7 @@ camera_0:
   publish image interval: 5
   publish image resolution: *cam_common_pub_img_res
   publish depth: True
-  visible: True
+  visible: False
   publish depth resolution: *cam_common_pub_depth_res
   multipass: True
   mouse control multipliers: { pan: 0.1, rotate: 1.0, scroll: 0.1, arcball: 0.1 }
@@ -52,7 +52,7 @@ camera_1:
   publish image interval: 5
   publish image resolution: *cam_common_pub_img_res
   publish depth: True
-  visible: True
+  visible: False
   publish depth resolution: *cam_common_pub_depth_res
   multipass: True
   mouse control multipliers: { pan: 0.1, rotate: 1.0, scroll: 0.1, arcball: 0.1 }
@@ -70,7 +70,7 @@ camera_2:
   publish image interval: 5
   publish image resolution: *cam_common_pub_img_res
   publish depth: True
-  visible: True
+  visible: False
   publish depth resolution: *cam_common_pub_depth_res
   multipass: True
   mouse control multipliers: { pan: 0.1, rotate: 1.0, scroll: 0.1, arcball: 0.1 }
@@ -88,7 +88,7 @@ camera_3:
   publish image interval: 5
   publish image resolution: *cam_common_pub_img_res
   publish depth: True
-  visible: True
+  visible: False
   publish depth resolution: *cam_common_pub_depth_res
   multipass: True
   mouse control multipliers: { pan: 0.1, rotate: 1.0, scroll: 0.1, arcball: 0.1 }
@@ -106,7 +106,7 @@ camera_4:
   publish image interval: 5
   publish image resolution: *cam_common_pub_img_res
   publish depth: True
-  visible: True
+  visible: False
   publish depth resolution: *cam_common_pub_depth_res
   multipass: True
   mouse control multipliers: { pan: 0.1, rotate: 1.0, scroll: 0.1, arcball: 0.1 }
