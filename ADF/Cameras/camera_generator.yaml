@@ -18,7 +18,7 @@ cam common configs:
   publish depth resolution: &cam_common_pub_depth_res { width: 640, height: 480 }
 
 
-cameras: [camera_0, camera_1, camera_2, camera_3, camera_4]
+cameras: [camera_0]
 
 # radius=0.04, theta=45.0deg (elevation), phi=90.0deg (azimuth) (front)
 camera_0:
@@ -39,7 +39,7 @@ camera_0:
   multipass: True
   mouse control multipliers: { pan: 0.1, rotate: 1.0, scroll: 0.1, arcball: 0.1 }
 # radius=0.04, theta=45.0deg (elevation), phi=0.0deg (azimuth) (side 1)
-camera_1:
+'''camera_1:
   namespace: cameras/
   name: camera_1
   location: { x: 0.058928, y: 0.190799, z: 0.767525 }
@@ -109,4 +109,4 @@ camera_4:
   visible: False
   publish depth resolution: *cam_common_pub_depth_res
   multipass: True
-  mouse control multipliers: { pan: 0.1, rotate: 1.0, scroll: 0.1, arcball: 0.1 }
+  mouse control multipliers: { pan: 0.1, rotate: 1.0, scroll: 0.1, arcball: 0.1 }'''
