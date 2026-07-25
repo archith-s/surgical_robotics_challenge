@@ -67,8 +67,8 @@ import re
 # ---------------------------------------------------------------------------
 
 
-LOOK_AT = (0.0306997597, 0.1867316746, 0.7336420412) #PSM_MIDPOINT (avg of psm1/toolyawlink + psm2/toolyawlink, fully stretched)
-#LOOK_AT = (0.0307, 0.1695, 0.6978) #SIMPLE
+#LOOK_AT = (0.0306997597, 0.1867316746, 0.7336420412) #PSM_MIDPOINT (avg of psm1/toolyawlink + psm2/toolyawlink, fully stretched)
+LOOK_AT = (0.0307, 0.1695, 0.6978) #SIMPLE
 #LOOK_AT = (0.0043925177, 0.2601964176, 0.742035985) #STRAIGHT
 #LOOK_AT = (0.0564242899, 0.2649616003, .7395174503) #COMPLEX
 
